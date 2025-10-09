@@ -1,0 +1,48 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+.DS_Store
+dist
+dist-ssr
+coverage
+*.local
+
+/cypress/videos/
+/cypress/screenshots/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+*.tsbuildinfo
+
+test-results/
+playwright-report/
+
+# 环境变量文件（包含API密钥等敏感信息）
+.env
+.env.local
+.env.*.local
+
+# 配置文件（如果包含敏感数据）
+config.json
+secret.json
+
+# 本地数据文件/缓存
+/data/
+/cache/
+*.db
+*.sqlite
