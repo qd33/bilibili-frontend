@@ -4,25 +4,25 @@
     <div class="stats-grid">
       <div class="tech-card">
         <h3>总视频数</h3>
-        <p class="stat-number">{{ dataStore.overviewStats.videoCount }}</p>
+        <p class="stat-number">{{ stats.videoCount }}</p>
         <p class="stat-desc">已采集视频数量</p>
       </div>
 
       <div class="tech-card">
         <h3>UP主数量</h3>
-        <p class="stat-number">{{ dataStore.overviewStats.upCount }}</p>
+        <p class="stat-number">{{ stats.upCount }}</p>
         <p class="stat-desc">活跃内容创作者</p>
       </div>
 
       <div class="tech-card">
         <h3>总播放量</h3>
-        <p class="stat-number">{{ dataStore.overviewStats.totalViews.toLocaleString() }}</p>
+        <p class="stat-number">{{ stats.totalViews.toLocaleString() }}</p>
         <p class="stat-desc">视频累计播放</p>
       </div>
 
       <div class="tech-card">
         <h3>总点赞数</h3>
-        <p class="stat-number">{{ dataStore.overviewStats.totalLikes.toLocaleString() }}</p>
+        <p class="stat-number">{{ stats.totalLikes.toLocaleString() }}</p>
         <p class="stat-desc">用户互动点赞</p>
       </div>
     </div>
@@ -32,7 +32,7 @@
       <div class="tech-card">
         <h3 class="section-title">播放量趋势</h3>
         <LineChart
-          :data="dataStore.videoTrendData"
+          :data="chartData.viewTrend"
           height="300px"
         />
       </div>
@@ -40,7 +40,7 @@
       <div class="tech-card">
         <h3 class="section-title">分区分布</h3>
         <PieChart
-          :data="dataStore.partitionData"
+          :data="chartData.partitionData"
           height="300px"
         />
       </div>
@@ -65,30 +65,42 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
-import { useDataStore } from '@/stores/dataStore'
+import { ref, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
 import LineChart from '@/components/charts/LineChart.vue'
 import PieChart from '@/components/charts/PieChart.vue'
-import { ElMessage } from 'element-plus'
 
-const dataStore = useDataStore()
-
-// 页面加载时获取数据
-onMounted(() => {
-  loadInitialData()
+// 模拟数据 - 后续替换为真实API
+const stats = ref({
+  videoCount: 156,
+  upCount: 42,
+  totalViews: 1258473,
+  totalLikes: 89234
 })
 
-const loadInitialData = async () => {
-  await dataStore.fetchOverviewStats()
-  await dataStore.fetchVideoTrend()
-  await dataStore.fetchPartitionData()
-  ElMessage.success('数据加载完成!')
-}
+const chartData = ref({
+  viewTrend: {
+    xAxis: ['10-01', '10-02', '10-03', '10-04', '10-05', '10-06', '10-07'],
+    series: [120, 200, 150, 80, 70, 110, 130]
+  },
+  partitionData: [
+    { value: 40, name: '生活' },
+    { value: 30, name: '科技' },
+    { value: 20, name: '游戏' },
+    { value: 10, name: '音乐' }
+  ]
+})
+
+// 模拟从后端获取数据
+onMounted(() => {
+  setTimeout(() => {
+    console.log('加载B站数据...')
+  }, 1000)
+})
 
 const testBackendConnection = async () => {
   try {
     ElMessage.info('正在测试后端连接...')
-    // 这里可以添加真实的后端连接测试
     setTimeout(() => {
       ElMessage.success('后端连接正常!')
     }, 1000)
@@ -98,22 +110,15 @@ const testBackendConnection = async () => {
 }
 
 const refreshData = () => {
-  loadInitialData()
+  ElMessage.info('刷新数据...')
 }
 
 const viewBackendData = () => {
-  // 在新标签页打开后端API文档或管理界面
   window.open('http://localhost:8080', '_blank')
 }
 </script>
 
 <style scoped>
-.action-buttons {
-  display: flex;
-  gap: 15px;
-  flex-wrap: wrap;
-}
-
 .stat-number {
   font-size: 2.5rem;
   font-weight: bold;
@@ -125,6 +130,12 @@ const viewBackendData = () => {
 .stat-desc {
   color: var(--text-secondary);
   font-size: 0.9rem;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
 }
 
 /* 响应式设计 */

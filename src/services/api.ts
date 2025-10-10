@@ -43,6 +43,11 @@ export const upApi = {
   // 保存UP主信息
   saveUp: (upData: any) => {
     return request.post('/up', upData)
+  },
+
+  // 🆕 触发UP主数据抓取
+  triggerUpCrawl: (uid: string) => {
+    return request.post(`/up/${uid}/crawl`)
   }
 }
 
@@ -57,4 +62,11 @@ export const statsApi = {
   getPartitionStats: () => {
     return request.get('/stats/partitions')
   }
+}
+
+// 🆕 统一的API导出
+export const api = {
+  ...videoApi,
+  ...upApi,
+  ...statsApi
 }

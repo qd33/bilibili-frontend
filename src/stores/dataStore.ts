@@ -21,6 +21,10 @@ export const useDataStore = defineStore('data', () => {
   const currentVideo = ref(null)
   const currentUp = ref(null)
 
+  // 🆕 UP主相关状态
+  const upCrawlStatus = ref<'idle' | 'loading' | 'success' | 'error'>('idle')
+  const upVideoList = ref<any[]>([])
+
   // Actions - 获取数据的方法
   const fetchOverviewStats = async () => {
     try {
@@ -98,6 +102,24 @@ export const useDataStore = defineStore('data', () => {
     }
   }
 
+  // 🆕 触发UP主数据抓取
+  const triggerUpCrawl = async (uid: string) => {
+    upCrawlStatus.value = 'loading'
+    try {
+      const result = await upApi.triggerUpCrawl(uid)
+      upCrawlStatus.value = 'success'
+      return result
+    } catch (error) {
+      upCrawlStatus.value = 'error'
+      throw error
+    }
+  }
+
+  // 🆕 设置UP主视频列表
+  const setUpVideoList = (videos: any[]) => {
+    upVideoList.value = videos
+  }
+
   return {
     // 状态
     overviewStats,
@@ -105,12 +127,16 @@ export const useDataStore = defineStore('data', () => {
     partitionData,
     currentVideo,
     currentUp,
+    upCrawlStatus,
+    upVideoList,
 
     // Actions
     fetchOverviewStats,
     fetchVideoTrend,
     fetchPartitionData,
     fetchVideoDetail,
-    fetchUpDetail
+    fetchUpDetail,
+    triggerUpCrawl,
+    setUpVideoList
   }
 })

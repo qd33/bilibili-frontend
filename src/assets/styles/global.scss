@@ -187,7 +187,7 @@ a {
   text-decoration: none;
 
   &:hover {
-    color: lighten($accent-blue, 10%);
+    color: #33c2f1; // 替换 lighten($accent-blue, 10%)
     text-decoration: underline;
   }
 }
@@ -207,7 +207,7 @@ a {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: lighten($accent-blue, 10%);
+  background: #33c2f1; // 替换 lighten($accent-blue, 10%)
 }
 
 // 响应式字体大小
@@ -322,4 +322,10 @@ body {
   @include mobile {
     width: 100%;
   }
+}
+
+// 登录按钮悬停效果
+.nav-actions .login-btn:hover {
+  background: #33c2f1; // 替换 lighten($accent-blue, 10%)
+  transform: translateY(-2px);
 }
