@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import LineChart from '@/components/charts/LineChart.vue'
@@ -116,3 +117,16 @@ onMounted(() => {
   border: 1px dashed #4a5568;
 }
 </style>
+=======
+<script setup lang="ts"></script>
+
+<template>
+  <h1>You did it!</h1>
+  <p>
+    Visit <a href="https://vuejs.org/" target="_blank" rel="noopener">vuejs.org</a> to read the
+    documentation
+  </p>
+</template>
+
+<style scoped></style>
+>>>>>>> 8288dbe540b89ef5495d00e47bb32151c33fee87
