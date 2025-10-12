@@ -60,6 +60,16 @@
           查看后端数据
         </el-button>
       </div>
+
+      <!-- 连接状态显示 -->
+      <div v-if="connectionStatus" class="connection-status">
+        <el-alert
+          :title="connectionStatus.title"
+          :type="connectionStatus.type"
+          :closable="false"
+          show-icon
+        />
+      </div>
     </div>
   </div>
 </template>
@@ -69,48 +79,71 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import LineChart from '@/components/charts/LineChart.vue'
 import PieChart from '@/components/charts/PieChart.vue'
+import { useDataStore } from '@/stores/dataStore'
+import request from '@/utils/request'
 
-// 模拟数据 - 后续替换为真实API
-const stats = ref({
-  videoCount: 156,
-  upCount: 42,
-  totalViews: 1258473,
-  totalLikes: 89234
-})
+const dataStore = useDataStore()
 
+// 使用真实数据
+const stats = ref(dataStore.overviewStats)
 const chartData = ref({
-  viewTrend: {
-    xAxis: ['10-01', '10-02', '10-03', '10-04', '10-05', '10-06', '10-07'],
-    series: [120, 200, 150, 80, 70, 110, 130]
-  },
-  partitionData: [
-    { value: 40, name: '生活' },
-    { value: 30, name: '科技' },
-    { value: 20, name: '游戏' },
-    { value: 10, name: '音乐' }
-  ]
+  viewTrend: dataStore.videoTrendData,
+  partitionData: dataStore.partitionData
 })
 
-// 模拟从后端获取数据
-onMounted(() => {
-  setTimeout(() => {
-    console.log('加载B站数据...')
-  }, 1000)
+const connectionStatus = ref<{title: string, type: 'success' | 'error' | 'info'} | null>(null)
+
+// 页面加载时获取真实数据
+onMounted(async () => {
+  await dataStore.fetchOverviewStats()
+  await dataStore.fetchVideoTrend()
+  await dataStore.fetchPartitionData()
 })
 
 const testBackendConnection = async () => {
   try {
     ElMessage.info('正在测试后端连接...')
-    setTimeout(() => {
-      ElMessage.success('后端连接正常!')
-    }, 1000)
-  } catch (error) {
-    ElMessage.error('后端连接失败: ' + error)
+    connectionStatus.value = { title: '正在连接后端服务...', type: 'info' }
+
+    // 测试基础连接
+    const helloResponse = await request.get('/test/hello')
+    console.log('基础连接测试:', helloResponse)
+
+    // 测试视频接口
+    const videoTest = await request.get('/video/test')
+    console.log('视频接口测试:', videoTest)
+
+    // 测试服务层
+    const serviceTest = await request.get('/test/services')
+    console.log('服务层测试:', serviceTest)
+
+    connectionStatus.value = {
+      title: `后端连接正常！服务状态: ${videoTest}`,
+      type: 'success'
+    }
+    ElMessage.success('所有后端接口测试通过！')
+
+  } catch (error: any) {
+    const errorMsg = error.response?.data || error.message
+    connectionStatus.value = {
+      title: `连接失败: ${errorMsg}`,
+      type: 'error'
+    }
+    ElMessage.error('后端连接测试失败: ' + errorMsg)
+    console.error('连接测试错误:', error)
   }
 }
 
-const refreshData = () => {
-  ElMessage.info('刷新数据...')
+const refreshData = async () => {
+  try {
+    ElMessage.info('正在刷新数据...')
+    await dataStore.fetchOverviewStats()
+    await dataStore.fetchVideoTrend()
+    await dataStore.fetchPartitionData()
+    ElMessage.success('数据刷新完成！')
+  } catch (error) {
+    ElMessage.error('数据刷新失败: ' + error)
+  }
 }
 
 const viewBackendData = () => {
@@ -136,6 +169,11 @@ const viewBackendData = () => {
   display: flex;
   gap: 15px;
   flex-wrap: wrap;
+  margin-bottom: 15px;
+}
+
+.connection-status {
+  margin-top: 15px;
 }
 
 /* 响应式设计 */

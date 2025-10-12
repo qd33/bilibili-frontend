@@ -21,6 +21,15 @@
         </router-link>
 
         <router-link
+          to="/up"
+          class="nav-item"
+          :class="{ active: $route.name === 'UpAnalysis' }"
+        >
+          <el-icon><User /></el-icon>
+          <span class="nav-text">UP主分析</span>
+        </router-link>
+
+        <router-link
           to="/partitions"
           class="nav-item"
           :class="{ active: $route.name === 'PartitionAnalysis' }"
@@ -43,7 +52,7 @@
           class="nav-item"
           :class="{ active: $route.name === 'Admin' }"
         >
-          <el-icon><User /></el-icon>
+          <el-icon><Setting /></el-icon>
           <span class="nav-text">管理后台</span>
         </router-link>
       </div>
@@ -66,6 +75,16 @@
           >
             <el-icon><DataAnalysis /></el-icon>
             <span>数据总览</span>
+          </router-link>
+
+          <router-link
+            to="/up"
+            class="mobile-nav-item"
+            :class="{ active: $route.name === 'UpAnalysis' }"
+            @click="showMobileMenu = false"
+          >
+            <el-icon><User /></el-icon>
+            <span>UP主分析</span>
           </router-link>
 
           <router-link
@@ -94,7 +113,7 @@
             :class="{ active: $route.name === 'Admin' }"
             @click="showMobileMenu = false"
           >
-            <el-icon><User /></el-icon>
+            <el-icon><Setting /></el-icon>
             <span>管理后台</span>
           </router-link>
         </div>
@@ -118,6 +137,7 @@ import {
   PieChart,
   PriceTag,
   User,
+  Setting,
   Menu
 } from '@element-plus/icons-vue'
 
