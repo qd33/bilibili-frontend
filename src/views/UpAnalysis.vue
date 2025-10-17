@@ -27,7 +27,97 @@
       >
         调试数据
       </el-button>
+
+      <el-button
+        v-if="!dataStore.currentUp"
+        @click="handleCrawlFirst"
+        type="warning"
+        :loading="crawling"
+      >
+        {{ crawling ? '爬取中...' : '先爬取数据' }}
+      </el-button>
+
+      <!-- 爬取最新数据按钮 -->
+      <el-button
+        v-if="dataStore.currentUp && !showCrawlLatest"
+        @click="showCrawlLatest = true"
+        type="success"
+        :loading="crawlingLatest"
+      >
+        <el-icon><Refresh /></el-icon>
+        爬取最新数据
+      </el-button>
+
+      <el-button
+        @click="testImageProxy"
+        type="success"
+        size="small"
+      >
+        测试图片代理
+      </el-button>
     </div>
+
+    <!-- 爬取最新数据确认弹窗 -->
+    <el-dialog
+      v-model="showCrawlLatest"
+      title="🔄 爬取最新数据"
+      width="500px"
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+    >
+      <div class="dialog-content">
+        <el-alert
+          title="此操作将重新爬取UP主的最新数据，包括："
+          type="info"
+          :closable="false"
+        />
+        <ul class="feature-list">
+          <li>📸 最新头像信息</li>
+          <li>🎬 最新发布的视频</li>
+          <li>📊 最新的统计数据</li>
+          <li>🔄 更新数据库中的信息</li>
+        </ul>
+
+        <div class="timeout-note">
+          <el-alert
+            title="由于需要爬取最新数据，此操作可能需要较长时间（最长120秒），请耐心等待..."
+            type="warning"
+            :closable="false"
+          />
+        </div>
+
+        <div class="up-info-preview" v-if="dataStore.currentUp">
+          <h4>当前UP主信息：</h4>
+          <div class="up-preview">
+            <el-avatar :size="40" :src="dataStore.currentUp.avatar" />
+            <div class="up-details">
+              <p><strong>{{ dataStore.currentUp.name }}</strong></p>
+              <p>UID: {{ dataStore.currentUp.uid }}</p>
+              <p>当前视频数: {{ dataStore.videoCount }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button
+            @click="showCrawlLatest = false"
+            :disabled="crawlingLatest"
+          >
+            取消
+          </el-button>
+          <el-button
+            type="success"
+            @click="handleCrawlLatest"
+            :loading="crawlingLatest"
+            :disabled="!dataStore.currentUp"
+          >
+            {{ crawlingLatest ? '爬取中...' : '开始爬取' }}
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
 
     <!-- 错误提示 -->
     <el-alert
@@ -43,10 +133,18 @@
     <div v-if="dataStore.currentUp" class="up-info">
       <el-card class="up-card">
         <div class="up-header">
-          <el-avatar :size="60" :src="dataStore.currentUp.avatar" />
+          <el-avatar
+            :size="60"
+            :src="dataStore.currentUp.avatar"
+            @error="handleAvatarError"
+          />
           <div class="up-details">
             <h3>{{ dataStore.currentUp.name }}</h3>
             <p>UID: {{ dataStore.currentUp.uid }}</p>
+            <p class="avatar-info">头像状态: {{ avatarStatus }}</p>
+            <p class="data-info" v-if="lastCrawlTime">
+              最后爬取: {{ lastCrawlTime }}
+            </p>
           </div>
         </div>
       </el-card>
@@ -62,6 +160,12 @@
         <el-tag v-if="dataStore.firstVideo" type="info">
           最新: {{ dataStore.firstVideo.title }}
         </el-tag>
+        <el-tag type="warning">
+          图片代理: {{ proxyStatus }}
+        </el-tag>
+        <el-tag v-if="lastCrawlTime" type="info">
+          更新时间: {{ lastCrawlTime }}
+        </el-tag>
       </div>
 
       <!-- 视频网格 -->
@@ -75,8 +179,16 @@
             <img
               :src="video.cover"
               :alt="video.title"
-              @error="handleImageError"
+              @error="handleImageErrorEvent"
+              @load="handleImageLoad"
+              :data-video-id="video.bvid"
             />
+            <div v-if="!imageLoaded[video.bvid]" class="image-loading">
+              <el-icon class="is-loading" color="#00aeec">
+                <Loading />
+              </el-icon>
+              <span>加载中...</span>
+            </div>
           </div>
           <div class="video-info">
             <h4 class="video-title">{{ video.title }}</h4>
@@ -107,24 +219,153 @@
         </el-button>
       </el-empty>
     </div>
+
+    <!-- 加载状态 -->
+    <div v-if="loading" class="loading-state">
+      <el-icon class="is-loading" color="#00aeec" :size="32">
+        <Loading />
+      </el-icon>
+      <p>数据加载中...</p>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { useDataStore } from '../stores/dataStore';
+import { Loading, Refresh } from '@element-plus/icons-vue';
+import { useDataStore } from '@/stores/dataStore';
+import { handleImageError, getDefaultCover, checkImageUrl } from '@/utils/imageProxy';
 
 // 状态管理
 const dataStore = useDataStore();
-const searchUid = ref('104777016'); // 默认测试UID
+const searchUid = ref('23947287');
 const loading = ref(false);
+const crawling = ref(false);
+const crawlingLatest = ref(false);
+const showCrawlLatest = ref(false);
+const avatarStatus = ref('未知');
+const proxyStatus = ref('未知');
+const imageLoaded = ref<Record<string, boolean>>({});
+const lastCrawlTime = ref('');
 
-// 图片加载失败处理
-const handleImageError = (event: Event) => {
+// 计算属性 - 格式化当前时间
+const currentTime = computed(() => {
+  return new Date().toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+});
+
+// 图片加载成功处理
+const handleImageLoad = (event: Event) => {
   const img = event.target as HTMLImageElement;
-  img.src = '/default-cover.jpg';
-  console.warn('🖼️ 图片加载失败:', img.src);
+  const videoId = img.dataset.videoId;
+
+  if (videoId) {
+    imageLoaded.value[videoId] = true;
+    console.log('✅ 图片加载成功:', videoId);
+  }
+};
+
+// 图片加载错误处理
+const handleImageErrorEvent = (event: Event) => {
+  const img = event.target as HTMLImageElement;
+  const videoId = img.dataset.videoId;
+
+  if (videoId) {
+    imageLoaded.value[videoId] = true;
+  }
+
+  console.warn('🖼️ 图片加载失败:', videoId);
+  handleImageError(event);
+};
+
+// 头像加载错误处理
+const handleAvatarError = (event: Event) => {
+  const img = event.target as HTMLImageElement;
+  console.warn('🖼️ 头像加载失败:', img.src);
+  img.src = getDefaultCover();
+  avatarStatus.value = '加载失败，使用默认头像';
+};
+
+// 测试图片代理服务
+const testImageProxy = async () => {
+  try {
+    proxyStatus.value = '检测中';
+    ElMessage.info('正在测试图片代理服务...');
+
+    const isWorking = await dataStore.testImageProxy();
+
+    if (isWorking) {
+      proxyStatus.value = 'active';
+      ElMessage.success('图片代理服务正常！');
+    } else {
+      proxyStatus.value = 'inactive';
+      ElMessage.warning('图片代理服务异常，请检查后端服务');
+    }
+  } catch (error) {
+    proxyStatus.value = 'error';
+    ElMessage.error('图片代理测试失败: ' + error);
+    console.error('❌ 图片代理测试失败:', error);
+  }
+};
+
+// 爬取最新数据功能
+const handleCrawlLatest = async () => {
+  if (!dataStore.currentUp) return;
+
+  try {
+    crawlingLatest.value = true;
+    const startTime = Date.now();
+
+    ElMessage.info('开始爬取最新数据，这可能需要较长时间，请耐心等待...');
+
+    const result = await dataStore.triggerUpCrawlWithTimeout(
+      dataStore.currentUp.uid,
+      120000
+    );
+
+    const endTime = Date.now();
+    const duration = ((endTime - startTime) / 1000).toFixed(1);
+
+    if (result.success) {
+      lastCrawlTime.value = currentTime.value;
+      ElMessage.success(`最新数据爬取成功！耗时 ${duration} 秒`);
+
+      showCrawlLatest.value = false;
+
+      setTimeout(async () => {
+        await handleSearch();
+      }, 2000);
+    } else {
+      throw new Error(result.message || '爬取失败');
+    }
+
+  } catch (error: unknown) {
+    console.error('❌ 爬取最新数据失败:', error);
+
+    let errorMessage = '爬取最新数据失败';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    } else if (typeof error === 'string') {
+      errorMessage = error;
+    } else if (error && typeof error === 'object' && 'message' in error) {
+      errorMessage = String((error as any).message);
+    }
+
+    if (errorMessage.includes('timeout') || errorMessage.includes('超时')) {
+      ElMessage.warning('爬取操作超时，但数据可能仍在后台处理中，请稍后刷新查看');
+    } else {
+      ElMessage.error('爬取最新数据失败: ' + errorMessage);
+    }
+  } finally {
+    crawlingLatest.value = false;
+  }
 };
 
 // 主搜索功能
@@ -139,15 +380,23 @@ const handleSearch = async () => {
 
     console.log(`🎯 开始查询UP主: ${uid}`);
     loading.value = true;
+    avatarStatus.value = '加载中...';
+    imageLoaded.value = {};
 
-    // 使用新的完整信息获取方法
+    await testImageProxy();
+
     await dataStore.fetchUpWithVideos(uid);
 
-    // 根据结果显示不同消息
+    lastCrawlTime.value = currentTime.value;
+
+    if (dataStore.currentUp?.avatar) {
+      const avatarOk = await checkImageUrl(dataStore.currentUp.avatar);
+      avatarStatus.value = avatarOk ? '✅ 加载成功' : '❌ 加载失败';
+    }
+
     if (dataStore.hasVideos) {
       ElMessage.success(`成功加载 ${dataStore.videoCount} 个视频`);
 
-      // 检查第一个视频的封面和标题
       const firstVideo = dataStore.firstVideo;
       if (firstVideo) {
         console.log('✅ 视频数据验证:', {
@@ -160,27 +409,66 @@ const handleSearch = async () => {
       ElMessage.warning('该UP主暂无视频数据，请尝试抓取数据');
     }
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ UP主查询失败:', error);
 
-    // 更友好的错误提示
-    if (error.message.includes('不存在')) {
-      ElMessage.error('UP主不存在，请检查UID是否正确');
-    } else if (error.message.includes('网络') || error.message.includes('请求')) {
-      ElMessage.error('网络请求失败，请检查网络连接');
-    } else if (error.message.includes('空')) {
-      ElMessage.warning('UP主数据为空，请尝试抓取数据');
-    } else {
-      ElMessage.error('查询失败: ' + error.message);
+    let errorMessage = '查询失败';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    } else if (typeof error === 'string') {
+      errorMessage = error;
+    } else if (error && typeof error === 'object' && 'message' in error) {
+      errorMessage = String((error as any).message);
     }
 
-    // 开发模式下使用模拟数据
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🛠️ 开发模式：使用模拟数据');
-      useMockData();
+    if (errorMessage.includes('不存在')) {
+      ElMessage.error('UP主不存在，请检查UID是否正确');
+    } else if (errorMessage.includes('网络') || errorMessage.includes('请求')) {
+      ElMessage.error('网络请求失败，请检查网络连接');
+    } else if (errorMessage.includes('空')) {
+      ElMessage.warning('UP主数据为空，请尝试抓取数据');
+    } else {
+      ElMessage.error('查询失败: ' + errorMessage);
     }
   } finally {
     loading.value = false;
+  }
+};
+
+// 先爬取数据再查询
+const handleCrawlFirst = async () => {
+  const uid = searchUid.value.trim();
+  if (!uid) {
+    ElMessage.error('请输入UP主UID');
+    return;
+  }
+
+  try {
+    crawling.value = true;
+    ElMessage.info('开始爬取UP主数据，请稍候...');
+
+    await dataStore.triggerUpCrawl(uid);
+    ElMessage.success('数据爬取完成！');
+
+    setTimeout(() => {
+      handleSearch();
+    }, 3000);
+
+  } catch (error: unknown) {
+    console.error('❌ 爬取失败:', error);
+
+    let errorMessage = '爬取失败';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    } else if (typeof error === 'string') {
+      errorMessage = error;
+    } else if (error && typeof error === 'object' && 'message' in error) {
+      errorMessage = String((error as any).message);
+    }
+
+    ElMessage.error('爬取失败: ' + errorMessage);
+  } finally {
+    crawling.value = false;
   }
 };
 
@@ -205,15 +493,25 @@ const handleCrawl = async () => {
 
     ElMessage.success('数据抓取完成！');
 
-    // 抓取完成后重新查询
     setTimeout(() => {
       handleSearch();
     }, 2000);
 
-  } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('抓取失败: ' + error.message);
+  } catch (error: unknown) {
+    if (error === 'cancel' || (error instanceof Error && error.message.includes('cancel'))) {
+      return;
     }
+
+    let errorMessage = '抓取失败';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    } else if (typeof error === 'string') {
+      errorMessage = error;
+    } else if (error && typeof error === 'object' && 'message' in error) {
+      errorMessage = String((error as any).message);
+    }
+
+    ElMessage.error('抓取失败: ' + errorMessage);
   }
 };
 
@@ -225,50 +523,31 @@ const handleDebug = async () => {
     ElMessage.info('开始调试数据，请查看控制台...');
     await dataStore.debugUpData(dataStore.currentUp.uid);
     ElMessage.success('调试完成，请查看控制台输出');
-  } catch (error) {
-    ElMessage.error('调试失败: ' + error.message);
-  }
-};
+  } catch (error: unknown) {
+    console.error('❌ 调试失败:', error);
 
-// 模拟数据（开发环境使用）
-const useMockData = () => {
-  dataStore.videoList = [
-    {
-      bvid: 'BV1A1234567',
-      title: '【测试视频】这是一个测试视频标题',
-      cover: 'https://example.com/cover1.jpg',
-      description: '这是一个测试视频描述',
-      play: 15000,
-      like: 1200,
-      danmaku: 450,
-      publishTime: '2024-01-01T10:00:00',
-      partition: '生活'
-    },
-    {
-      bvid: 'BV1B1234567',
-      title: '【另一个测试】第二个测试视频',
-      cover: 'https://example.com/cover2.jpg',
-      description: '第二个测试视频的描述',
-      play: 8900,
-      like: 650,
-      danmaku: 230,
-      publishTime: '2024-01-02T14:30:00',
-      partition: '科技'
+    let errorMessage = '调试失败';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    } else if (typeof error === 'string') {
+      errorMessage = error;
+    } else if (error && typeof error === 'object' && 'message' in error) {
+      errorMessage = String((error as any).message);
     }
-  ];
+
+    ElMessage.error('调试失败: ' + errorMessage);
+  }
 };
 
 // 组件挂载时自动查询默认UP主
 onMounted(() => {
-  // 可以从URL参数获取UID，或者使用默认值
   const urlParams = new URLSearchParams(window.location.search);
   const uidFromUrl = urlParams.get('uid');
   if (uidFromUrl) {
     searchUid.value = uidFromUrl;
   }
 
-  // 自动查询（可选）
-  // handleSearch();
+  testImageProxy();
 });
 </script>
 
@@ -284,10 +563,63 @@ onMounted(() => {
   gap: 10px;
   margin-bottom: 20px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .error-alert {
   margin-bottom: 20px;
+}
+
+.dialog-content {
+  margin-bottom: 20px;
+}
+
+.feature-list {
+  margin: 16px 0;
+  padding-left: 20px;
+}
+
+.feature-list li {
+  margin: 8px 0;
+  color: #606266;
+  font-size: 14px;
+}
+
+.timeout-note {
+  margin: 16px 0;
+}
+
+.up-info-preview {
+  margin-top: 20px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.up-info-preview h4 {
+  margin: 0 0 12px 0;
+  color: #303133;
+}
+
+.up-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.up-details p {
+  margin: 4px 0;
+  font-size: 14px;
+}
+
+.up-details strong {
+  color: #303133;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
 
 .up-info {
@@ -310,6 +642,17 @@ onMounted(() => {
   color: #666;
 }
 
+.avatar-info {
+  font-size: 0.8em;
+  color: #888;
+}
+
+.data-info {
+  font-size: 0.8em;
+  color: #67C23A;
+  font-weight: 500;
+}
+
 .videos-section {
   margin-top: 30px;
 }
@@ -318,6 +661,7 @@ onMounted(() => {
   margin: 15px 0;
   display: flex;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .video-grid {
@@ -332,6 +676,7 @@ onMounted(() => {
   border-radius: 8px;
   overflow: hidden;
   transition: box-shadow 0.3s;
+  position: relative;
 }
 
 .video-card:hover {
@@ -342,12 +687,28 @@ onMounted(() => {
   width: 100%;
   height: 180px;
   overflow: hidden;
+  position: relative;
 }
 
 .video-cover img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.image-loading {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 0.9em;
 }
 
 .video-info {
@@ -389,5 +750,34 @@ onMounted(() => {
 .empty-state {
   text-align: center;
   padding: 40px 0;
+}
+
+.loading-state {
+  text-align: center;
+  padding: 40px 0;
+  color: #666;
+}
+
+.loading-state p {
+  margin-top: 15px;
+}
+
+@media (max-width: 768px) {
+  .search-section {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-section .el-input {
+    margin-bottom: 10px;
+  }
+
+  .video-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dialog-footer {
+    flex-direction: column;
+  }
 }
 </style>

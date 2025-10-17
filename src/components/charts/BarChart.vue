@@ -1,0 +1,115 @@
+<!-- src/components/charts/BarChart.vue -->
+<template>
+  <div ref="chartRef" :style="{ width: width, height: height }"></div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted, onUnmounted, watch } from 'vue'
+import echarts from '@/utils/echarts.ts'
+
+interface Props {
+  width?: string
+  height?: string
+  data: {
+    xAxis: string[]
+    series: number[]
+  }
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  width: '100%',
+  height: '300px'
+})
+
+const chartRef = ref<HTMLElement>()
+let chartInstance: echarts.ECharts | null = null
+
+onMounted(() => {
+  if (chartRef.value) {
+    chartInstance = echarts.init(chartRef.value)
+    updateChart()
+  }
+})
+
+onUnmounted(() => {
+  if (chartInstance) {
+    chartInstance.dispose()
+  }
+})
+
+watch(() => props.data, updateChart, { deep: true })
+
+function updateChart() {
+  if (!chartInstance) return
+
+  const option = {
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(26, 34, 56, 0.9)',
+      borderColor: '#10b981'
+    },
+    grid: {
+      left: '3%',
+      right: '4%',
+      bottom: '3%',
+      containLabel: true
+    },
+    xAxis: {
+      type: 'category',
+      data: props.data.xAxis,
+      axisLine: {
+        lineStyle: {
+          color: '#4a5568'
+        }
+      },
+      axisLabel: {
+        color: '#a0aec0',
+        fontSize: 12
+      }
+    },
+    yAxis: {
+      type: 'value',
+      axisLine: {
+        lineStyle: {
+          color: '#4a5568'
+        }
+      },
+      axisLabel: {
+        color: '#a0aec0'
+      },
+      splitLine: {
+        lineStyle: {
+          color: '#2d3748',
+          type: 'dashed'
+        }
+      }
+    },
+    series: [
+      {
+        data: props.data.series,
+        type: 'bar',
+        itemStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: '#10b981' },
+            { offset: 1, color: '#059669' }
+          ]),
+          borderRadius: [4, 4, 0, 0]
+        },
+        emphasis: {
+          itemStyle: {
+            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+              { offset: 0, color: '#34d399' },
+              { offset: 1, color: '#10b981' }
+            ])
+          }
+        }
+      }
+    ]
+  }
+
+  chartInstance.setOption(option)
+}
+
+defineExpose({ chartInstance })
+</script>
